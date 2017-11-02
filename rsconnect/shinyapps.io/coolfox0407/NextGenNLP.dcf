@@ -1,0 +1,11 @@
+name: NextGenNLP
+title: NextGenNLP
+account: coolfox0407
+server: shinyapps.io
+appId: 231404
+bundleId: 1056355
+url: https://coolfox0407.shinyapps.io/NextGenNLP/
+when: 1509636179.01502
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: MilestoneReport.Rmd|NextGenNLP.Rpres|ReadMe.RMD|unigram.RData|old/bigram.RData|old/quadgram.RData|old/trigram.RData|old/unigram.RData|www/coursera_logo.png|www/johnhopkins_logo.png|www/swiftkey_logo.png

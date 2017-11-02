@@ -1,0 +1,422 @@
+---
+title: "Coursera Data Science Capstone: SwiftKey Project"
+author: "Hariharan D"
+date: "28 October 2017"
+output:
+  html_document:
+    fig_width: 9
+    fig_height: 9
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+### 1.Introduction
+
+This course project is part of "Data Science Capstone: SwiftKey Project" - Coursera's "Data Science" specialization. Goal of this Capstone project is to use "HC Corpora Dataset" to design and develop a prediction algorithm to predict the most likely the successive word in the sequence of words and host the app using Shiny application.
+
+This interim Milestone Report focuses on Exploratory Data Analysis on the corpus of data from various sources relating to Twitter, Blogs and News. This project will focus on the English language datasets. NLP (Natural Language Processing) and R libraries like "tm" and "RWeka" are used to process and tokenize N-grams as first step towards developing prediction model and algorithm.
+
+### 2.Data Source:
+
+Dataset for this project is sourced from this **[website](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip)**
+
+
+### 3.Set Options and Load R Libraries
+
+Set the chunk options.
+
+```{r Set Options, include = TRUE}
+
+library(knitr)
+
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, warning = FALSE, message = FALSE, fig.align = "center")
+
+```
+
+
+Load the necessary libraries.
+
+Note: It is assumed that the below libraries are aready installed.
+
+```{r R Library}
+
+library(downloader)
+library(plyr)
+library(dplyr)
+library(tm)
+library(ggplot2)
+library(RWeka)
+library(SnowballC)
+library(wordcloud)
+
+```
+
+
+### 4.Load Dataset and Clean the Data
+
+Loading the dataset.
+
+```{r Load Dataset}
+
+set.seed(12345)
+
+setwd("C:/Users/Welcome/Desktop/Data Science/R/Coursera Reading Material/Course 10 - Data Science Capstone/Project/")
+
+fileUrl <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+
+if(!file.exists("./DataSet"))
+  {
+    dir.create("./DataSet")
+  }
+
+if(!file.exists("./DataSet/Coursera-SwiftKey.zip"))
+  {
+    download.file(fileUrl, destfile = "./DataSet/Coursera-SwiftKey.zip",mode = "wb")
+    Download_Date <- Sys.time()
+  }
+
+if(!file.exists("./DataSet/final"))
+  {
+    unzip(zipfile="./DataSet/Coursera-SwiftKey.zip",exdir="./DataSet")
+  }
+
+pathFiles <- file.path("./DataSet/final", "en_US")
+files <- list.files(pathFiles, recursive=TRUE)
+files
+
+enUSTwitter <- "./DataSet/final/en_US/en_US.twitter.txt"
+enUSBlogs <- "./DataSet/final/en_US/en_US.blogs.txt"
+enUSNews <- "./DataSet/final/en_US/en_US.news.txt"
+
+
+```
+
+### 5.Summary Statistics of Dataset
+
+Summary Statistics for Tweets, Blogs, News are provided for the below parameters;
+
+* File Size (in MB)
+* Total number of Lines
+* Total number of Words
+* Average number of Words per Line
+* Maximum Characters per Line
+
+```{r Summary of Data}
+
+con <- file(enUSTwitter, "r") 
+lineTwitter <- readLines(con, encoding = "UTF-8", skipNul = TRUE)
+close(con)
+
+con <- file(enUSBlogs, "r") 
+lineBlogs <- readLines(con, encoding = "UTF-8", skipNul = TRUE)
+close(con)
+
+con <- file(enUSNews, "r") 
+lineNews <- readLines(con, encoding = "UTF-8", skipNul = TRUE)
+close(con)
+
+
+fileSizeMB <- function(lns)
+{
+  file.info(lns)$size/(1024^2)
+}
+
+lineCount <- function(lns)
+{
+  length(lns)
+}
+
+wordCount <- function(lns)
+  {
+    sum(sapply(gregexpr("\\S+", lns), length))
+  }
+
+meanSentenceLength <- function(lns)
+  {
+    mean(sapply(gregexpr("\\S+", lns), length))
+  }
+
+maxChars <- function(lns)
+  {
+    max(nchar(lns))
+  }
+
+countTwitter <- c(round(fileSizeMB(enUSTwitter),0), lineCount(lineTwitter), wordCount(lineTwitter), meanSentenceLength(lineTwitter), maxChars(lineTwitter))
+countBlogs <- c(round(fileSizeMB(enUSBlogs),0), lineCount(lineBlogs), wordCount(lineBlogs), meanSentenceLength(lineBlogs), maxChars(lineBlogs))
+countNews <- c(round(fileSizeMB(enUSNews),0), lineCount(lineNews), wordCount(lineNews), meanSentenceLength(lineNews), maxChars(lineNews))
+
+countEnUS <- rbind(countTwitter, countBlogs, countNews)
+rownames(countEnUS) <- c("Twitter", "Blogs", "News")
+colnames(countEnUS) <- c("File-Size(MB)", "Lines-Count", "Words-Count", "Mean-Words-Per-Line", "Max-Chars-Per-Line")
+
+countEnUS
+
+```
+
+### 6.Sampling of Dataset
+
+First step, is to convert the encoding of the dataset to "ASCII" format. Once the dataset is encoded then sampling is performed to extract 2% of source data.
+
+```{r Sampling Dataset}
+
+lineTwitter <- iconv(lineTwitter, "UTF-8", "ASCII", sub="")
+lineBlogs <- iconv(lineBlogs, "UTF-8", "ASCII", sub="")
+lineNews <- iconv(lineNews, "UTF-8", "ASCII", sub="")
+
+set.seed(123456)
+
+sampleData <- c(sample(lineTwitter, length(lineTwitter) * 0.02), sample(lineBlogs, length(lineBlogs) * 0.02), sample(lineNews, length(lineNews) * 0.02))
+sampleData <- unlist(strsplit(sampleData, "[\\.\\,!\\?\\:]+"))
+
+```
+
+### 7.Tokenize and Clean Dataset
+
+Tokenization is performed by splitting each line into sentences. Then dataset is cleansed to remove the following; non-word characters, lower-case, punctuations, whitespaces.
+
+```{r Tokenize Dataset}
+
+corpusData <- sampleData
+corpusData <- gsub("(f|ht)tp(s?)://(.*)[.][a-z]+"," ",corpusData)
+corpusData <- gsub("@[^\\s]+"," ",corpusData)
+corpusData <- tolower(corpusData)
+# corpusData <- removeWords(corpusData, stopwords("english"))
+corpusData <- removePunctuation(corpusData)
+corpusData <- removeNumbers(corpusData)
+corpusData <- trimws(corpusData)
+corpusDataCloud <- unlist(strsplit(corpusData,"\\s"))
+corpusData <- strsplit(corpusData,"\\s")
+
+```
+
+### 8.Create Word Cloud
+
+Word Cloud is generated on the dataset.
+
+```{r WordCloud}
+
+wordcloud(corpusDataCloud, max.words=100, random.order=FALSE, colors=brewer.pal(8,"Accent"))
+
+```
+
+### 9.Remove Profanity words
+
+Profanity words are removed from the corpus data.
+
+```{r Profanity Dataset}
+
+profanityFilter <- function(termList)
+{
+  profanities <- readLines("./Profanity.txt", skipNul = TRUE)
+  lapply(termList, setdiff, y=profanities)
+}
+
+corpusData <- profanityFilter(corpusData)
+
+head(corpusData,5)
+length(corpusData)
+sum(sapply(corpusData, length))
+
+```
+
+### 10.Term Frequencies
+
+Term frequencies are identified for the most common words in the dataset and a frequency table is created.
+
+```{r Frequency}
+
+getFreq <- function(termList)
+{
+  term <- data.frame(unlist(termList))
+  grouped <- as.data.frame(table(term))
+  freq <- grouped[order(-grouped$Freq),]
+  rownames(freq) <- 1:nrow(freq)
+  
+  total <- sum(freq$Freq)
+  freq$CumFreq <- cumsum(freq$Freq)
+  freq$Coverage <- freq$CumFreq/total
+  
+  return(freq)
+}	
+
+sampleENTermFrequency <- getFreq(corpusData)
+
+tmp <- sampleENTermFrequency[1:50,]
+tmp$termLength <-  nchar(as.character(tmp$term))
+
+ggplot(tmp, aes(x=reorder(term,Freq), y=Freq, fill=termLength)) +
+  geom_bar(stat="identity") +
+  coord_flip() + 
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        axis.title.y=element_blank(),
+        axis.title.x=element_blank())
+
+
+filterFrequencyTable <- function(freqTable, binCoverageShift=0.01)
+{
+  shiftTotal <- 0
+  
+  freqTable$keep <- FALSE
+  
+  for (n in 1:nrow(freqTable)) 
+  {
+    shiftTotal <- shiftTotal + freqTable$Coverage[n]
+    
+    if(shiftTotal >= binCoverageShift)
+    {
+      freqTable$keep[n] <- TRUE
+      shiftTotal <- 0
+    }
+  }
+  
+  freqTable[freqTable$keep == TRUE,]
+}
+
+
+tmpFilter <- filterFrequencyTable(sampleENTermFrequency, 0.005)
+
+ggplot(tmpFilter, aes(y=as.integer(rownames(tmpFilter)), x=Coverage)) +
+    geom_line(color="steelblue") +
+    coord_flip() + 
+    labs(x="Coverage",y="Observations")  + 
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold"), 
+        axis.text = element_text(face = "bold"), 
+        axis.title = element_text(face = "bold"))
+
+```
+
+### 11.Create N-grams
+
+Dataset is converted to N-grams format for NLP. 
+
+```{r N-grams}
+
+createNgram <- function(vec, n=2){
+  l <- length(vec) 
+  if(l < n){
+    return(c())
+  }else if(l == n){
+    return(paste(vec, collapse = " "))
+  }else{
+    numNgrams <- l-n+1
+    mtrx <- matrix(nrow=numNgrams, ncol=n)
+    for(i in 1:n){
+      m <- l - n + i
+      mtrx[,i] <- vec[i:m]
+    }
+    ngrams <- apply(mtrx, 1, paste, collapse=" ")
+    return(ngrams)
+  }
+} 
+
+transformNGram <- function(termList, n=2){
+  lapply(termList, createNgram, n=n)
+}
+
+
+```
+
+### 12.Create Uni-grams
+
+Uni-gram frequency table is created for the corpus.
+
+```{r Uni-grams}
+
+sampleENUniGram <- transformNGram(corpusData,1)
+sampleENUniGramFrequency <- getFreq(sampleENUniGram)
+
+plotUniGram <- filterFrequencyTable(sampleENUniGramFrequency, 0.005)
+ggplot(plotUniGram, aes(y=as.integer(rownames(plotUniGram)), x=Coverage)) +
+  geom_line(color="steelblue") +
+  coord_flip() + 
+  labs(title = "Uni-gram", x="Coverage",y="Observations") + 
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"), 
+        axis.text = element_text(face = "bold"), 
+        axis.title = element_text(face = "bold")) 
+
+```
+
+
+### 13.Create Bi-grams
+
+Bi-gram frequency table is created for the corpus.
+
+```{r Bi-grams}
+
+sampleENBiGrams <- transformNGram(corpusData,2)
+sampleENBiGramsFrequency <- getFreq(sampleENBiGrams)
+
+plotBiGram <- filterFrequencyTable(sampleENBiGramsFrequency, 0.005)
+ggplot(plotBiGram, aes(y=as.integer(rownames(plotBiGram)), x=Coverage)) +
+  geom_line(color="steelblue") +
+  coord_flip() + 
+  labs(title = "Bi-gram", x="Coverage",y="Observations") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"), 
+        axis.text = element_text(face = "bold"), 
+        axis.title = element_text(face = "bold"))
+
+```
+
+### 13.Create Tri-grams
+
+Tri-gram frequency table is created for the corpus.
+
+```{r Tri-grams}
+
+sampleENTriGrams <- transformNGram(corpusData,3)
+sampleENTriGramsFrequency <- getFreq(sampleENTriGrams)
+
+plotTriGram <- filterFrequencyTable(sampleENTriGramsFrequency, 0.005)
+ggplot(plotTriGram, aes(y=as.integer(rownames(plotTriGram)), x=Coverage)) +
+  geom_line(color="steelblue") +
+  coord_flip() + 
+  labs(title = "Tri-gram", x="Coverage",y="Observations") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"), 
+        axis.text = element_text(face = "bold"), 
+        axis.title = element_text(face = "bold")) 
+
+```
+
+### 14.Coverage Factor
+
+Coverage factor for Uni-gram, Bi-grams, Tri-grams are computed.
+
+```{r Coverage}
+
+coverageFactor <- function(freqTable, coverage)
+  {
+    pos <- nrow(freqTable[freqTable$Coverage < coverage,])
+    pos / nrow(freqTable) 
+  }
+
+coverageFactorValues <- c(0.1,0.5,0.9)
+uniCov <- sapply(coverageFactorValues, coverageFactor, freqTable = sampleENUniGramFrequency)
+biCov <- sapply(coverageFactorValues, coverageFactor, freqTable = sampleENBiGramsFrequency)
+triCov <- sapply(coverageFactorValues, coverageFactor, freqTable = sampleENTriGramsFrequency)
+
+infoCoverage <- rbind(uniCov, biCov, triCov)
+rownames(infoCoverage) <- c("Uni-gram", "Bi-gram", "Tri-gram")
+colnames(infoCoverage) <- coverageFactorValues
+infoCoverage
+
+```
+
+### 15.Summary & Plans for Shiny app
+
+* Stored N-gram frequencies of the corpus source is used to predicting the successive word in a sequence of words.
+
+* Higher degree of N-grams will have lower frequency than that of lower degree N-grams.
+
+* Next step of this capstone project would be to tune and precision the predictive algorithm model, and deploy the same using Shiny app.
+
+* Shiny app's UI will have a text box for user input. When the user enters a word or phrase the app will use the predictive algorithm to suggest the most likely sucessive word.

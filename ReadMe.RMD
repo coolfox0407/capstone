@@ -1,0 +1,26 @@
+---
+title: "ReadMe"
+author: "Hariharan D"
+date: "2 November 2017"
+output: html_document
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+```{r Set Options, include = FALSE}
+
+library(knitr)
+
+knitr::opts_chunk$set(echo = FALSE, tidy = TRUE, warning = FALSE, message = FALSE, fig.align = "center")
+
+```
+
+This course project is part of "Data Science Capstone: SwiftKey Project" - Coursera's "Data Science" specialization. Goal of this Capstone project is to use "HC Corpora Dataset" to design and develop a prediction algorithm to predict the most likely the successive word in the sequence of words and host the app using Shiny application.
+
+Inputs from three sources (Twitter, News, Blogs) were considered for sampling. This project will focus on the English language datasets. NLP (Natural Language Processing) and R libraries like "tm" and "RWeka" are used to process and tokenize N-grams as first step towards developing prediction model and algorithm.
+
+
+Dataset for this project is sourced from this **[website](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip)**
